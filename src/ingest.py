@@ -15,9 +15,10 @@ load_dotenv()
 DATA_PATH = "data"
 CHROMA_PATH = "chroma_db"
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
-BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "10"))
-BATCH_SLEEP_SECONDS = float(os.getenv("INGEST_BATCH_SLEEP_SECONDS", "2"))
+BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "1"))
+BATCH_SLEEP_SECONDS = float(os.getenv("INGEST_BATCH_SLEEP_SECONDS", "5"))
 MAX_RETRIES = int(os.getenv("INGEST_MAX_RETRIES", "5"))
+MAX_CHUNKS = int(os.getenv("INGEST_MAX_CHUNKS", "0"))
 RESET_CHROMA = os.getenv("RESET_CHROMA", "false").lower() == "true"
 
 def main():
@@ -31,6 +32,9 @@ def main():
     # 2. Split the documents into chunks
     print("Splitting documents into chunks...")
     chunks = split_documents(documents)
+    if MAX_CHUNKS > 0:
+        chunks = chunks[:MAX_CHUNKS]
+        print(f"Limiting ingestion to first {len(chunks)} chunks for testing.")
     print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 
     # 3. Save to ChromaDB
@@ -84,8 +88,7 @@ def save_to_chroma(chunks):
                     raise
 
                 retry_match = re.search(r"retry in ([\d.]+)s", message)
-                wait_seconds = float(retry_match.group(1)) if retry_match else BATCH_SLEEP_SECONDS * attempt
-                wait_seconds = max(wait_seconds, BATCH_SLEEP_SECONDS)
+                wait_seconds = float(retry_match.group(1)) if retry_match else (2 ** attempt) * BATCH_SLEEP_SECONDS                
                 print(f"Quota reached. Waiting {wait_seconds:.1f}s before retry {attempt + 1}/{MAX_RETRIES}...")
                 time.sleep(wait_seconds)
 
